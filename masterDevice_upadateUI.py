@@ -1,5 +1,3 @@
-# Master Device
-# Transaction Issue
 import csv
 import os
 import tkinter as tk
@@ -33,8 +31,7 @@ class MongoDBHandler:
 
         # Handle index creation/update
         index_name = "unique_transaction"
-        # desired_keys = [("user_id", 1), ("timestamp", 1), ("amount", 1), ("type", 1)]
-        desired_keys = [("user_id", 1), ("timestamp", 1), ("amount", 1), ("type", 1)]  # Removed node_address
+        desired_keys = [("user_id", 1), ("timestamp", 1), ("amount", 1), ("type", 1)]
         current_indexes = self.transactions.index_information()
 
         if index_name in current_indexes:
@@ -169,13 +166,17 @@ class LoRaSerialMonitor:
         self.message_display = None
         self.root = root
         self.root.title("LoRa Master Serial Monitor")
+
+        # Set minimum window size for small screens
+        self.root.minsize(800, 600)
         self.root.geometry("1000x700")
 
-        # Set theme using sv_ttk
-        sv_ttk.set_theme("dark")  # Can be "light" or "dark"
+        # Make window responsive
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(0, weight=1)
 
-        # Configure root window
-        self.root.minsize(1200, 800)
+        # Set theme using sv_ttk
+        sv_ttk.set_theme("dark")
 
         # MongoDB integration
         self.mongo_handler = MongoDBHandler()
@@ -185,7 +186,7 @@ class LoRaSerialMonitor:
         self.serial_thread = None
         self.stop_event = Event()
         self.message_queue = queue.Queue()
-        self.message_history = []  # Store messages for filtering
+        self.message_history = []
 
         # GUI elements
         self.create_widgets()
@@ -206,14 +207,14 @@ class LoRaSerialMonitor:
             if not os.path.exists(att_file_path):
                 with open(att_file_path, mode='w', newline='') as file:
                     writer = csv.writer(file)
-                    writer.writerow(["Node", "Name", "ID", "Timestamp"])  # Added Node column
+                    writer.writerow(["Node", "Name", "ID", "Timestamp"])
 
             # Initialize request amount file
             req_file_path = os.path.abspath(self.request_amount_file)
             if not os.path.exists(req_file_path):
                 with open(req_file_path, mode='w', newline='') as file:
                     writer = csv.writer(file)
-                    writer.writerow(["Node", "Name", "ID", "Amount", "Timestamp"])  # Added Node column
+                    writer.writerow(["Node", "Name", "ID", "Amount", "Timestamp"])
         except Exception as e:
             self.log_message(f"Error initializing files: {str(e)}\n", "system")
 
@@ -333,10 +334,6 @@ class LoRaSerialMonitor:
                 return
 
             # Check for duplicates using datetime
-            # if self.mongo_handler.is_duplicate_transaction(user_id, node_address, amount_float, timestamp):
-            #     self.log_message(f"Duplicate transaction detected\n", "error")
-            #     return
-            # In process_payment_request():
             if self.mongo_handler.is_duplicate_transaction(user_id, amount_float, timestamp):
                 self.log_message(f"Duplicate transaction prevented: {user_id}, ₹{amount_float}\n", "error")
                 return
@@ -370,13 +367,13 @@ class LoRaSerialMonitor:
     def transmit_receipt(self, receipt_data):
         """Send receipt with formatted timestamp and retries"""
         node = receipt_data.get('node_address', '00').upper().zfill(2)
-        formatted_time = receipt_data['timestamp'].strftime("%Y-%m-%d %H:%M:%S")  # Format timestamp
+        formatted_time = receipt_data['timestamp'].strftime("%Y-%m-%d %H:%M:%S")
 
         receipt_msg = (
             f"RECEIPT|{receipt_data['user_id']}|"
             f"{receipt_data['request_amount']:.2f}|"
             f"{receipt_data['new_balance']:.2f}|"
-            f"{formatted_time}"  # Use formatted timestamp
+            f"{formatted_time}"
         )
 
         for _ in range(3):  # 3 retries
@@ -389,13 +386,12 @@ class LoRaSerialMonitor:
             return
 
         # Validate and format node address
-        node = node.zfill(2).upper()  # Ensure 2-digit hex
+        node = node.zfill(2).upper()
         if not re.match(r'^[0-9A-F]{2}$', node):
             self.log_message(f"Invalid node: {node}\n", "error")
             return
 
         try:
-            # Send in "NN MESSAGE" format
             command = f"{node} {message}\n"
             self.serial_conn.write(command.encode('utf-8'))
             self.log_message(f"Sent to {node}: {message}\n", "sent")
@@ -405,7 +401,6 @@ class LoRaSerialMonitor:
     def write_transaction_to_csv(self, data):
         """Write transaction receipt to transaction.csv"""
         try:
-            # Convert datetime to string for CSV
             timestamp_str = data['timestamp'].strftime("%Y-%m-%d %H:%M:%S")
             filtered_data = {
                 'node_address': data.get('node_address', ''),
@@ -414,7 +409,7 @@ class LoRaSerialMonitor:
                 'previous_balance': data['previous_balance'],
                 'request_amount': data['request_amount'],
                 'new_balance': data['new_balance'],
-                'timestamp': timestamp_str  # Convert to string here
+                'timestamp': timestamp_str
             }
 
             file_exists = os.path.isfile('transaction.csv')
@@ -430,7 +425,6 @@ class LoRaSerialMonitor:
         except Exception as e:
             self.log_message(f"Error writing to transaction.csv: {str(e)}\n", "error")
 
-    # Updated log_receipt method
     def log_receipt(self, data):
         """Log receipt details to the message display"""
         receipt_msg = (
@@ -512,203 +506,194 @@ class LoRaSerialMonitor:
                 messagebox.showerror("Error", f"Failed to get balance: {str(e)}")
 
     def create_widgets(self):
-        # Create main container
-        main_container = ttk.Frame(self.root, padding="10")
+        # Create main container with responsive design
+        main_container = ttk.Frame(self.root, padding="5")
         main_container.pack(fill=tk.BOTH, expand=True)
+        main_container.columnconfigure(0, weight=1)
+        main_container.rowconfigure(2, weight=1)  # Message display gets most space
 
-        # Configure style
+        # Configure style for smaller screens
         style = ttk.Style()
-        style.configure('TLabel', font=('Segoe UI', 10))
-        style.configure('TButton', font=('Segoe UI', 10))
-        style.configure('TEntry', font=('Segoe UI', 10))
-        style.configure('TCombobox', font=('Segoe UI', 10))
-        style.configure('TLabelFrame', font=('Segoe UI', 10, 'bold'))
+        style.configure('TLabel', font=('Segoe UI', 9))
+        style.configure('TButton', font=('Segoe UI', 9))
+        style.configure('TEntry', font=('Segoe UI', 9))
+        style.configure('TCombobox', font=('Segoe UI', 9))
+        style.configure('TLabelFrame', font=('Segoe UI', 9, 'bold'))
 
         # ========== LOGOS SECTION ==========
-        # List of logo paths (replace with your actual logo paths)
-        logo_paths = [
-            "logo1.png",
-            "logo2.png",
-            "logo3.png",
-            "logo4.png"
-        ]
-
-        # Load all logos
+        logo_paths = ["logo1.png", "logo2.png", "logo3.png", "logo4.png"]
         logo_images = []
+
         for path in logo_paths:
             try:
                 image = Image.open(path)
-                image = image.resize((150, 150), Image.LANCZOS)  # Adjust size as needed
+                # Smaller logo size for small screens
+                image = image.resize((80, 80), Image.LANCZOS)
                 logo_images.append(ImageTk.PhotoImage(image))
             except Exception as e:
                 print(f"Error loading logo {path}: {e}")
-                continue  # Skip if logo can't be loaded
+                continue
 
-        # Create a frame for logos if we have any loaded
         if logo_images:
             logo_frame = ttk.Frame(main_container)
-            logo_frame.pack(pady=(0, 15))  # Add some padding below logos
+            logo_frame.grid(row=0, column=0, sticky="ew", pady=(0, 5))
+            logo_frame.columnconfigure(0, weight=1)
 
-            # Add all loaded logos to the frame
+            # Center logos in a compact layout
+            inner_logo_frame = ttk.Frame(logo_frame)
+            inner_logo_frame.pack(expand=True)
+
             for logo_img in logo_images:
-                logo_label = ttk.Label(logo_frame, image=logo_img)
-                logo_label.image = logo_img  # Keep reference
-                logo_label.pack(side=tk.LEFT, padx=10)  # Horizontal layout with padding
+                logo_label = ttk.Label(inner_logo_frame, image=logo_img)
+                logo_label.image = logo_img
+                logo_label.pack(side=tk.LEFT, padx=3)
 
-        # Add balance display section
-        balance_frame = ttk.LabelFrame(main_container, text="User Balance", padding=(10, 5))
-        balance_frame.pack(fill=tk.X, pady=(0, 10))
+        # ========== BALANCE SECTION ==========
+        balance_frame = ttk.LabelFrame(main_container, text="User Balance", padding=(8, 4))
+        balance_frame.grid(row=1, column=0, sticky="ew", pady=(0, 5))
+        balance_frame.columnconfigure(1, weight=1)
 
-        # Configure tags for colored text
-        # Message display
-        # In create_widgets():
-        # Only create message display once
-        self.message_display = scrolledtext.ScrolledText(
-            main_container,
-            wrap=tk.WORD,
-            state='disabled',
-            font=('Consolas', 10),
-            padx=10,
-            pady=10,
-            bd=0,
-            relief=tk.FLAT
-        )
-        self.message_display.pack(fill=tk.BOTH, expand=True)
-
-        # Configure tags in one place
-        self.message_display.tag_config("receipt", foreground="#4CAF50", font=('Consolas', 10, 'bold'))
-
-        # Configure tags for colored text
-        self.message_display.tag_config("system", foreground="#4ec9b0")  # Teal
-        self.message_display.tag_config("complete", foreground="#4fc1ff")  # Blue
-        self.message_display.tag_config("chunk", foreground="#d4d4d4")  # Light gray
-        self.message_display.tag_config("sent", foreground="#ce9178")  # Orange
-        self.message_display.tag_config("info", foreground="#9cdcfe")  # Light blue
-        self.message_display.tag_config("receipt", foreground="#4CAF50", font=('Consolas', 10, 'bold'))  # Receipt tag
-
-        # Modify the balance display to show 2 decimal places
-        self.balance_display = ttk.Label(balance_frame, text="Balance: ₹0.00",
-                                         font=('Segoe UI', 10, 'bold'))
-
-        ttk.Label(balance_frame, text="User ID:").pack(side=tk.LEFT, padx=(0, 5))
-        self.balance_id_entry = ttk.Entry(balance_frame, width=15)
-        self.balance_id_entry.pack(side=tk.LEFT, padx=5)
+        # Compact balance layout
+        ttk.Label(balance_frame, text="User ID:").grid(row=0, column=0, sticky="w", padx=(0, 2))
+        self.balance_id_entry = ttk.Entry(balance_frame, width=12)
+        self.balance_id_entry.grid(row=0, column=1, sticky="w", padx=2)
 
         self.check_balance_button = ttk.Button(balance_frame, text="Check Balance",
                                                command=self.show_balance)
-        self.check_balance_button.pack(side=tk.LEFT, padx=5)
+        self.check_balance_button.grid(row=0, column=2, padx=2)
 
-        self.balance_display = ttk.Label(balance_frame, text="Balance: ₹0",
-                                         font=('Segoe UI', 10, 'bold'))
-        self.balance_display.pack(side=tk.RIGHT, padx=10)
+        self.balance_display = ttk.Label(balance_frame, text="Balance: ₹0.00",
+                                         font=('Segoe UI', 9, 'bold'))
+        self.balance_display.grid(row=0, column=3, padx=(10, 0), sticky="e")
 
         # ========== SERIAL CONNECTION SECTION ==========
-        connection_frame = ttk.LabelFrame(main_container, text="Serial Connection", padding=(10, 5))
-        connection_frame.pack(fill=tk.X, pady=(0, 10))
+        connection_frame = ttk.LabelFrame(main_container, text="Serial Connection", padding=(8, 4))
+        connection_frame.grid(row=2, column=0, sticky="ew", pady=(0, 5))
 
-        # Grid configuration for connection frame
+        # Responsive grid for connection controls
+        connection_frame.columnconfigure(1, weight=1)
         connection_frame.columnconfigure(3, weight=1)
 
-        # Port selection
-        ttk.Label(connection_frame, text="Port:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5), pady=5)
-        self.port_combobox = ttk.Combobox(connection_frame, width=25)
-        self.port_combobox.grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
+        # Row 0: Port selection
+        ttk.Label(connection_frame, text="Port:").grid(row=0, column=0, sticky="w", padx=(0, 2), pady=2)
+        self.port_combobox = ttk.Combobox(connection_frame, width=20)
+        self.port_combobox.grid(row=0, column=1, sticky="ew", padx=2, pady=2)
 
-        # Refresh button
-        self.refresh_button = ttk.Button(connection_frame, text="Refresh Ports", command=self.refresh_ports)
-        self.refresh_button.grid(row=0, column=2, padx=5, pady=5)
+        self.refresh_button = ttk.Button(connection_frame, text="Refresh",
+                                         command=self.refresh_ports)
+        self.refresh_button.grid(row=0, column=2, padx=2, pady=2)
 
-        # Baud rate
-        ttk.Label(connection_frame, text="Baud Rate:").grid(row=1, column=0, sticky=tk.W, padx=(0, 5), pady=5)
-        self.baud_entry = ttk.Entry(connection_frame, width=10)
+        # Row 1: Baud rate and connect
+        ttk.Label(connection_frame, text="Baud:").grid(row=1, column=0, sticky="w", padx=(0, 2), pady=2)
+        self.baud_entry = ttk.Entry(connection_frame, width=8)
         self.baud_entry.insert(0, "115200")
-        self.baud_entry.grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
+        self.baud_entry.grid(row=1, column=1, sticky="w", padx=2, pady=2)
 
-        # Connect button
-        self.connect_button = ttk.Button(connection_frame, text="Connect", command=self.toggle_connection)
-        self.connect_button.grid(row=1, column=2, padx=5, pady=5)
+        self.connect_button = ttk.Button(connection_frame, text="Connect",
+                                         command=self.toggle_connection)
+        self.connect_button.grid(row=1, column=2, padx=2, pady=2)
 
         # Status indicator
         self.status_label = ttk.Label(connection_frame, text="Disconnected",
-                                      font=('Segoe UI', 10, 'bold'))
-        self.status_label.grid(row=0, column=3, rowspan=2, padx=10, pady=5, sticky=tk.E)
+                                      font=('Segoe UI', 9, 'bold'), foreground='red')
+        self.status_label.grid(row=0, column=3, rowspan=2, padx=10, pady=2, sticky="e")
 
         # ========== MESSAGE DISPLAY SECTION ==========
-        display_frame = ttk.Frame(main_container)
-        display_frame.pack(fill=tk.BOTH, expand=True)
+        display_frame = ttk.LabelFrame(main_container, text="Messages", padding=(5, 2))
+        display_frame.grid(row=3, column=0, sticky="nsew", pady=(0, 5))
+        display_frame.columnconfigure(0, weight=1)
+        display_frame.rowconfigure(0, weight=1)
 
-        # Message display
+        # Message display with smaller font
         self.message_display = scrolledtext.ScrolledText(
             display_frame,
             wrap=tk.WORD,
             state='disabled',
-            font=('Consolas', 10),
-            padx=10,
-            pady=10,
-            bd=0,
-            relief=tk.FLAT
+            font=('Consolas', 8),  # Smaller font for small screens
+            padx=8,
+            pady=8,
+            height=12,  # Fixed height that works on small screens
+            bd=1,
+            relief=tk.SOLID
         )
-        self.message_display.pack(fill=tk.BOTH, expand=True)
+        self.message_display.grid(row=0, column=0, sticky="nsew")
 
         # Configure tags for colored text
-        self.message_display.tag_config("system", foreground="#4ec9b0")  # Teal
-        self.message_display.tag_config("complete", foreground="#4fc1ff")  # Blue
-        self.message_display.tag_config("chunk", foreground="#d4d4d4")  # Light gray
-        self.message_display.tag_config("sent", foreground="#ce9178")  # Orange
-        self.message_display.tag_config("info", foreground="#9cdcfe")  # Light blue
+        self.message_display.tag_config("system", foreground="#4ec9b0")
+        self.message_display.tag_config("complete", foreground="#4fc1ff")
+        self.message_display.tag_config("chunk", foreground="#d4d4d4")
+        self.message_display.tag_config("sent", foreground="#ce9178")
+        self.message_display.tag_config("info", foreground="#9cdcfe")
+        self.message_display.tag_config("receipt", foreground="#4CAF50", font=('Consolas', 8, 'bold'))
+        self.message_display.tag_config("error", foreground="#ff6b6b", font=('Consolas', 8, 'bold'))
 
         # ========== COMMAND SECTION ==========
-        command_frame = ttk.Frame(main_container, padding=(0, 5))
-        command_frame.pack(fill=tk.X)
+        command_frame = ttk.Frame(main_container)
+        command_frame.grid(row=4, column=0, sticky="ew", pady=(0, 5))
+        command_frame.columnconfigure(1, weight=1)
+        command_frame.columnconfigure(3, weight=1)
 
-        ttk.Label(command_frame, text="Send to Node:").pack(side=tk.LEFT, padx=(0, 5))
-        self.node_entry = ttk.Entry(command_frame, width=8)
-        self.node_entry.pack(side=tk.LEFT, padx=5)
+        ttk.Label(command_frame, text="Node:").grid(row=0, column=0, sticky="w", padx=(0, 2))
+        self.node_entry = ttk.Entry(command_frame, width=6)
+        self.node_entry.grid(row=0, column=1, sticky="w", padx=2)
 
-        ttk.Label(command_frame, text="Message:").pack(side=tk.LEFT, padx=(10, 5))
+        ttk.Label(command_frame, text="Message:").grid(row=0, column=2, sticky="w", padx=(5, 2))
         self.message_entry = ttk.Entry(command_frame)
-        self.message_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+        self.message_entry.grid(row=0, column=3, sticky="ew", padx=2)
 
-        self.send_button = ttk.Button(command_frame, text="Send", command=self.send_message)
-        self.send_button.pack(side=tk.LEFT, padx=(5, 0))
+        self.send_button = ttk.Button(command_frame, text="Send",
+                                      command=self.send_message)
+        self.send_button.grid(row=0, column=4, padx=(5, 0))
 
-        # ========== FILTER SECTION ==========
-        filter_frame = ttk.Frame(main_container, padding=(0, 5))
-        filter_frame.pack(fill=tk.X)
+        # ========== FILTER & ACTIONS SECTION ==========
+        action_frame = ttk.Frame(main_container)
+        action_frame.grid(row=5, column=0, sticky="ew", pady=(0, 5))
+        action_frame.columnconfigure(1, weight=1)
 
-        ttk.Label(filter_frame, text="Filter:").pack(side=tk.LEFT, padx=(0, 5))
-        self.filter_entry = ttk.Entry(filter_frame)
-        self.filter_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+        # Left side - Filter
+        filter_container = ttk.Frame(action_frame)
+        filter_container.grid(row=0, column=0, sticky="w")
+
+        ttk.Label(filter_container, text="Filter:").pack(side=tk.LEFT, padx=(0, 2))
+        self.filter_entry = ttk.Entry(filter_container, width=15)
+        self.filter_entry.pack(side=tk.LEFT, padx=2)
         self.filter_entry.bind('<KeyRelease>', self.apply_filter)
 
-        # Clear button
-        self.clear_button = ttk.Button(filter_frame, text="Clear Display", command=self.clear_display)
-        self.clear_button.pack(side=tk.RIGHT, padx=(5, 0))
+        # Right side - Action buttons (compact layout)
+        button_container = ttk.Frame(action_frame)
+        button_container.grid(row=0, column=1, sticky="e")
 
-        # Add buttons for opening files
-        self.open_request_button = ttk.Button(filter_frame, text="Open Requests",
-                                              command=lambda: self.open_file(self.request_amount_file))
-        self.open_request_button.pack(side=tk.RIGHT, padx=5)
+        # Smaller buttons for file access
+        self.open_attendance_button = ttk.Button(button_container, text="Attendance",
+                                                 command=lambda: self.open_file(self.attendance_file),
+                                                 width=10)
+        self.open_attendance_button.pack(side=tk.RIGHT, padx=(2, 0))
 
-        self.open_attendance_button = ttk.Button(filter_frame, text="Open Attendance",
-                                                 command=lambda: self.open_file(self.attendance_file))
-        self.open_attendance_button.pack(side=tk.RIGHT, padx=5)
+        self.open_request_button = ttk.Button(button_container, text="Requests",
+                                              command=lambda: self.open_file(self.request_amount_file),
+                                              width=8)
+        self.open_request_button.pack(side=tk.RIGHT, padx=2)
+
+        self.clear_button = ttk.Button(button_container, text="Clear",
+                                       command=self.clear_display, width=6)
+        self.clear_button.pack(side=tk.RIGHT, padx=2)
 
         # Populate ports
         self.refresh_ports()
 
+        # Bind Enter key to send message
+        self.message_entry.bind('<Return>', lambda e: self.send_message())
+        self.balance_id_entry.bind('<Return>', lambda e: self.show_balance())
+
     def open_file(self, filename):
         try:
-            os.startfile(filename)  # Works on Windows
+            os.startfile(filename)
         except:
             try:
-                # Try alternative methods for other OS
                 import subprocess
-                subprocess.call(('open', filename))  # macOS
-                # or subprocess.call(('xdg-open', filename))  # Linux
+                subprocess.call(('open', filename))
             except:
-                messagebox.showinfo("File Location",
-                                    f"File saved to:\n{os.path.abspath(filename)}")
+                messagebox.showinfo("File Location", f"File saved to:\n{os.path.abspath(filename)}")
 
     def refresh_ports(self):
         ports = serial.tools.list_ports.comports()
@@ -738,14 +723,13 @@ class LoRaSerialMonitor:
 
         try:
             self.serial_conn = serial.Serial(port, baud, timeout=1)
-            # Clear any existing data in the buffer
             self.serial_conn.reset_input_buffer()
             self.stop_event.clear()
             self.serial_thread = Thread(target=self.read_serial, daemon=True)
             self.serial_thread.start()
 
             self.connect_button.config(text="Disconnect")
-            self.status_label.config(text="Connected")
+            self.status_label.config(text="Connected", foreground='green')
             self.log_message(f"Connected to {port} at {baud} baud\n", "system")
 
         except serial.SerialException as e:
@@ -760,16 +744,15 @@ class LoRaSerialMonitor:
             self.serial_conn.close()
 
         self.connect_button.config(text="Connect")
-        self.status_label.config(text="Disconnected")
+        self.status_label.config(text="Disconnected", foreground='red')
         self.log_message("Disconnected from serial port\n", "system")
 
     def read_serial(self):
         while not self.stop_event.is_set():
             if self.serial_conn and self.serial_conn.is_open:
                 try:
-                    # Read a line from serial
                     line = self.serial_conn.readline().decode('utf-8', errors='replace').strip()
-                    if line:  # Only process if we got data
+                    if line:
                         self.message_queue.put(("serial", line))
                 except serial.SerialException as e:
                     self.message_queue.put(("system", f"Serial error: {str(e)}"))
@@ -783,7 +766,7 @@ class LoRaSerialMonitor:
         try:
             while not self.message_queue.empty():
                 source, message = self.message_queue.get_nowait()
-                self.message_history.append((source, message))  # Store for filtering
+                self.message_history.append((source, message))
 
                 if source == "serial":
                     self.process_serial_message(message)
@@ -797,7 +780,6 @@ class LoRaSerialMonitor:
     def log_message(self, message, msg_type):
         self.message_display.config(state='normal')
 
-        # Apply filter if one exists
         filter_text = self.filter_entry.get().lower()
         if not filter_text or filter_text in message.lower():
             self.message_display.insert(tk.END, message, msg_type)
@@ -817,7 +799,6 @@ class LoRaSerialMonitor:
             messagebox.showerror("Error", "Please enter both node ID and message")
             return
 
-        # Validate node ID (hex format)
         if not re.match(r'^[0-9a-fA-F]+$', node):
             messagebox.showerror("Error", "Node ID must be in hex format (e.g., '01' or 'AA')")
             return
@@ -836,7 +817,6 @@ class LoRaSerialMonitor:
 
         filter_text = self.filter_entry.get().lower()
 
-        # Re-display all messages that match the filter
         for source, message in self.message_history:
             if source == "serial":
                 if "COMPLETE from" in message:
@@ -860,7 +840,7 @@ class LoRaSerialMonitor:
         self.message_display.config(state='normal')
         self.message_display.delete(1.0, tk.END)
         self.message_display.config(state='disabled')
-        self.message_history = []  # Clear history as well
+        self.message_history = []
 
     def on_closing(self):
         self.disconnect_serial()
